@@ -1,4 +1,4 @@
-use crate::parsing::{read_transactions_file, write_accounts_file};
+use crate::parsing::{read_transactions_file, write_accounts};
 use crate::processor::Processor;
 use clap::Parser;
 use log::{error, info};
@@ -28,11 +28,11 @@ fn main() -> ExitCode {
         }
     };
 
-    let processing = Processor::new(csv_reader);
+    let processor = Processor::new(csv_reader);
 
-    let client_accounts = processing.process();
+    let client_accounts = processor.process();
 
-    let result = write_accounts_file(client_accounts);
+    let result = write_accounts(client_accounts);
 
     match result {
         Ok(_) => {

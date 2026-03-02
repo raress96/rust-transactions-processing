@@ -183,10 +183,7 @@ mod tests {
         assert!(tx.is_ok());
         assert_eq!(
             tx.unwrap(),
-            Transaction::Dispute(TransactionWithoutAmount {
-                client: 1,
-                tx: 1,
-            })
+            Transaction::Dispute(TransactionWithoutAmount { client: 1, tx: 1 })
         );
     }
 
@@ -219,10 +216,7 @@ mod tests {
         assert!(tx.is_ok());
         assert_eq!(
             tx.unwrap(),
-            Transaction::Resolve(TransactionWithoutAmount {
-                client: 1,
-                tx: 1,
-            })
+            Transaction::Resolve(TransactionWithoutAmount { client: 1, tx: 1 })
         );
     }
 
@@ -255,10 +249,7 @@ mod tests {
         assert!(tx.is_ok());
         assert_eq!(
             tx.unwrap(),
-            Transaction::Chargeback(TransactionWithoutAmount {
-                client: 1,
-                tx: 1,
-            })
+            Transaction::Chargeback(TransactionWithoutAmount { client: 1, tx: 1 })
         );
     }
 
@@ -274,9 +265,6 @@ mod tests {
         let tx = Transaction::try_from(csv_tx);
 
         assert!(tx.is_err());
-        assert_eq!(
-            tx.unwrap_err(),
-            "Chargeback tx 1 should not have amount"
-        );
+        assert_eq!(tx.unwrap_err(), "Chargeback tx 1 should not have amount");
     }
 }

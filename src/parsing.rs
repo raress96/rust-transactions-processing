@@ -1,5 +1,6 @@
 use csv::Reader;
 use log::info;
+use rust_decimal::prelude::Zero;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
@@ -26,7 +27,7 @@ pub struct CsvTransaction {
     pub amount: Option<Decimal>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 pub struct Account {
     pub client: u16,
     #[serde(serialize_with = "serialize_decimal")]
@@ -36,6 +37,18 @@ pub struct Account {
     #[serde(serialize_with = "serialize_decimal")]
     pub total: Decimal,
     pub locked: bool,
+}
+
+impl Account {
+    pub fn new(client: u16) -> Self {
+        Self {
+            client,
+            available: Decimal::zero(),
+            held: Decimal::zero(),
+            total: Decimal::zero(),
+            locked: false,
+        }
+    }
 }
 
 pub fn read_transactions_file(transactions_csv_path: &str) -> Result<Reader<File>, Box<dyn Error>> {
@@ -50,7 +63,7 @@ pub fn read_transactions_file(transactions_csv_path: &str) -> Result<Reader<File
     Ok(csv_reader)
 }
 
-pub fn write_accounts_file(client_accounts: BTreeMap<u16, Account>) -> Result<(), Box<dyn Error>> {
+pub fn write_accounts(client_accounts: BTreeMap<u16, Account>) -> Result<(), Box<dyn Error>> {
     info!("Writing {} accounts to stdout", client_accounts.len());
 
     let mut wtr = csv::Writer::from_writer(io::stdout());
