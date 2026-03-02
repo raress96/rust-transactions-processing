@@ -22,3 +22,11 @@ client, available, held, total, locked
 2, 2, 0, 2, false
 1, 1.5, 0, 1.5, false
 ```
+
+## Assumptions
+
+- Client and tx ids are unique
+- If an account is locked, deposits and withdrawals are rejected
+- Withdrawals exceeding available funds are rejected
+- Only deposits can be disputed, not withdrawals
+- Invalid transactions are logged and not processed, they do not fail the whole processing

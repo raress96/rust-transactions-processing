@@ -1,5 +1,5 @@
 use csv::Reader;
-use log::debug;
+use log::info;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
@@ -39,7 +39,7 @@ pub struct Account {
 }
 
 pub fn read_transactions_file(transactions_csv_path: &str) -> Result<Reader<File>, Box<dyn Error>> {
-    debug!("Reading transactions from: {}", transactions_csv_path);
+    info!("Reading transactions from: {}", transactions_csv_path);
 
     let file = File::open(transactions_csv_path)?;
 
@@ -51,6 +51,8 @@ pub fn read_transactions_file(transactions_csv_path: &str) -> Result<Reader<File
 }
 
 pub fn write_accounts_file(client_accounts: BTreeMap<u16, Account>) -> Result<(), Box<dyn Error>> {
+    info!("Writing {} accounts to stdout", client_accounts.len());
+
     let mut wtr = csv::Writer::from_writer(io::stdout());
 
     for account in client_accounts.values() {

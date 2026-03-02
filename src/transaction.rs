@@ -1,18 +1,20 @@
 use crate::parsing::{CsvTransaction, TxType};
 use rust_decimal::Decimal;
 
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TransactionWithAmount {
     pub client: u16,
     pub tx: u32,
     pub amount: Decimal,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct TransactionWithoutAmount {
     pub client: u16,
     pub tx: u32,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Transaction {
     Deposit(TransactionWithAmount),
     Withdrawal(TransactionWithAmount),
@@ -85,5 +87,196 @@ impl Transaction {
                 t.client
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal::prelude::FromPrimitive;
+
+    #[test]
+    fn test_try_from_deposit() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Deposit,
+            client: 1,
+            tx: 1,
+            amount: Some(Decimal::from_f64(1.0).unwrap()),
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_ok());
+        assert_eq!(
+            tx.unwrap(),
+            Transaction::Deposit(TransactionWithAmount {
+                client: 1,
+                tx: 1,
+                amount: Decimal::from_f64(1.0).unwrap()
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_from_deposit_err() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Deposit,
+            client: 1,
+            tx: 1,
+            amount: None,
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_err());
+        assert_eq!(tx.unwrap_err(), "Deposit tx 1 missing amount");
+    }
+
+    #[test]
+    fn test_try_from_withdrawal() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Withdrawal,
+            client: 1,
+            tx: 1,
+            amount: Some(Decimal::from_f64(1.0).unwrap()),
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_ok());
+        assert_eq!(
+            tx.unwrap(),
+            Transaction::Withdrawal(TransactionWithAmount {
+                client: 1,
+                tx: 1,
+                amount: Decimal::from_f64(1.0).unwrap()
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_from_withdrawal_err() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Withdrawal,
+            client: 1,
+            tx: 1,
+            amount: None,
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_err());
+        assert_eq!(tx.unwrap_err(), "Withdrawal tx 1 missing amount");
+    }
+
+    #[test]
+    fn test_try_from_dispute() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Dispute,
+            client: 1,
+            tx: 1,
+            amount: None,
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_ok());
+        assert_eq!(
+            tx.unwrap(),
+            Transaction::Dispute(TransactionWithoutAmount {
+                client: 1,
+                tx: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_from_dispute_err() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Dispute,
+            client: 1,
+            tx: 1,
+            amount: Some(Decimal::from_f64(1.0).unwrap()),
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_err());
+        assert_eq!(tx.unwrap_err(), "Dispute tx 1 should not have amount");
+    }
+
+    #[test]
+    fn test_try_from_resolve() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Resolve,
+            client: 1,
+            tx: 1,
+            amount: None,
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_ok());
+        assert_eq!(
+            tx.unwrap(),
+            Transaction::Resolve(TransactionWithoutAmount {
+                client: 1,
+                tx: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_from_resolve_err() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Resolve,
+            client: 1,
+            tx: 1,
+            amount: Some(Decimal::from_f64(1.0).unwrap()),
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_err());
+        assert_eq!(tx.unwrap_err(), "Resolve tx 1 should not have amount");
+    }
+
+    #[test]
+    fn test_try_from_chargeback() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Chargeback,
+            client: 1,
+            tx: 1,
+            amount: None,
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_ok());
+        assert_eq!(
+            tx.unwrap(),
+            Transaction::Chargeback(TransactionWithoutAmount {
+                client: 1,
+                tx: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_from_chargeback_err() {
+        let csv_tx = CsvTransaction {
+            tx_type: TxType::Chargeback,
+            client: 1,
+            tx: 1,
+            amount: Some(Decimal::from_f64(1.0).unwrap()),
+        };
+
+        let tx = Transaction::try_from(csv_tx);
+
+        assert!(tx.is_err());
+        assert_eq!(
+            tx.unwrap_err(),
+            "Chargeback tx 1 should not have amount"
+        );
     }
 }

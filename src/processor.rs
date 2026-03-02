@@ -29,10 +29,12 @@ impl Processor {
         let mut txs_storage = HashMap::new();
 
         for (index, result) in self.csv_reader.deserialize().enumerate() {
+            let line = index + 2;
+
             let csv_transaction: CsvTransaction = match result {
                 Ok(r) => r,
                 Err(e) => {
-                    error!("Invalid line {}: {:?}", index + 2, e);
+                    error!("Invalid line {}: {}", line, e);
                     continue;
                 }
             };
@@ -40,7 +42,7 @@ impl Processor {
             let record: Transaction = match csv_transaction.try_into() {
                 Ok(t) => t,
                 Err(e) => {
-                    error!("Invalid transaction on line {}: {}", index + 2, e);
+                    error!("Invalid transaction on line {}: {}", line, e);
                     continue;
                 }
             };
@@ -60,7 +62,7 @@ impl Processor {
                 account
             });
 
-            Self::process_transaction(&mut txs_storage, index, record, account);
+            Self::process_transaction(&mut txs_storage, line, record, account);
         }
 
         self.client_accounts
@@ -68,19 +70,33 @@ impl Processor {
 
     fn process_transaction(
         txs_storage: &mut HashMap<u32, StorageTransaction>,
-        index: usize,
+        line: usize,
         record: Transaction,
         account: &mut Account,
     ) {
-        match &record {
-            Transaction::Deposit(tx) => {
-                txs_storage.insert(tx.tx, StorageTransaction::Deposit(tx.clone()));
+        if account.locked {
+            warn!(
+                "Line {}, account {} is locked, transaction {:?} not accepted",
+                line, account.client, record
+            );
+            return;
+        }
 
-                account.available += tx.amount;
-                account.total += tx.amount;
+        match &record {
+            Transaction::Deposit(t) => {
+                txs_storage.insert(t.tx, StorageTransaction::Deposit(t.clone()));
+
+                account.available += t.amount;
+                account.total += t.amount;
             }
             Transaction::Withdrawal(t) => {
-                // TODO: Do withdrawals need to be disputed?
+                if t.amount > account.available {
+                    warn!(
+                        "Line {}, account {} doesn't have enough funds for withdrawal transaction {:?}",
+                        line, account.client, t
+                    );
+                    return;
+                }
 
                 account.available -= t.amount;
                 account.total -= t.amount;
@@ -91,90 +107,111 @@ impl Processor {
                 } else {
                     warn!(
                         "Line {}, disputed transaction {} for client {} doesn't exist",
-                        index + 2,
-                        t.tx,
-                        t.client,
+                        line, t.tx, t.client,
                     );
 
                     return;
                 };
 
                 match storage_tx {
-                    StorageTransaction::Deposit(tx) => {
-                        account.available -= tx.amount;
-                        account.held += tx.amount;
+                    StorageTransaction::Deposit(initial_tx) => {
+                        if initial_tx.client != t.client {
+                            warn!(
+                                "Line {}, disputed transaction {} is for a different client {} than original deposit client {}",
+                                line, t.tx, t.client, initial_tx.client
+                            );
+                            return;
+                        }
 
-                        txs_storage.insert(t.tx, StorageTransaction::DisputeInProgress(tx.clone()));
+                        account.available -= initial_tx.amount;
+                        account.held += initial_tx.amount;
+
+                        txs_storage.insert(
+                            t.tx,
+                            StorageTransaction::DisputeInProgress(initial_tx.clone()),
+                        );
                     }
                     _ => {
                         warn!(
                             "Line {}, transaction {} for client {} is not a deposit and can't be disputed",
-                            index + 2, t.tx, t.client,
+                            line, t.tx, t.client,
                         );
                     }
                 }
             }
             Transaction::Resolve(t) => {
-                let initial_tx = if let Some(initial_tx) = txs_storage.get(&t.tx) {
-                    initial_tx
+                let storage_tx = if let Some(storage_tx) = txs_storage.get(&t.tx) {
+                    storage_tx
                 } else {
                     warn!(
                         "Line {}, resolved transaction {} for client {} doesn't exist",
-                        index + 2,
-                        t.tx,
-                        t.client,
+                        line, t.tx, t.client,
                     );
 
                     return;
                 };
 
-                match initial_tx {
-                    StorageTransaction::DisputeInProgress(tx) => {
-                        account.available += tx.amount;
-                        account.held -= tx.amount;
+                match storage_tx {
+                    StorageTransaction::DisputeInProgress(initial_tx) => {
+                        if initial_tx.client != t.client {
+                            warn!(
+                                "Line {}, disputed transaction {} is for a different client {} than original deposit client {}",
+                                line, t.tx, t.client, initial_tx.client
+                            );
+                            return;
+                        }
 
-                        let tx_id = tx.tx;
+                        account.available += initial_tx.amount;
+                        account.held -= initial_tx.amount;
 
-                        txs_storage.remove(&tx_id);
+                        // Insert transaction back so it can possibly be disputed again
+                        txs_storage.insert(t.tx, StorageTransaction::Deposit(initial_tx.clone()));
                     }
                     _ => {
                         warn!(
                             "Line {}, transaction {} for client {} is not a dispute and can't be resolved",
-                            index + 2, t.tx, t.client,
+                            line, t.tx, t.client,
                         );
                     }
                 }
             }
             Transaction::Chargeback(t) => {
-                let initial_tx = if let Some(initial_tx) = txs_storage.get(&t.tx) {
-                    initial_tx
+                let storage_tx = if let Some(storage_tx) = txs_storage.get(&t.tx) {
+                    storage_tx
                 } else {
                     warn!(
                         "Line {}, chargeback transaction {} for client {} doesn't exist",
-                        index + 2,
-                        t.tx,
-                        t.client,
+                        line, t.tx, t.client,
                     );
 
                     return;
                 };
 
-                match initial_tx {
-                    StorageTransaction::DisputeInProgress(tx) => {
-                        account.held -= tx.amount;
-                        account.total -= tx.amount;
+                match storage_tx {
+                    StorageTransaction::DisputeInProgress(initial_tx) => {
+                        if initial_tx.client != t.client {
+                            warn!(
+                                "Line {}, disputed transaction {} is for a different client {} than original deposit client {}",
+                                line, t.tx, t.client, initial_tx.client
+                            );
+                            return;
+                        }
+
+                        account.held -= initial_tx.amount;
+                        account.total -= initial_tx.amount;
                         account.locked = true;
 
-                        let tx_id = tx.tx;
+                        let tx_id = initial_tx.tx;
 
+                        // Account is already locked so this transaction can no longer be disputed again
+                        // We can remove it for cleaning up memory usage
                         txs_storage.remove(&tx_id);
                     }
                     _ => {
                         warn!(
                             "Line {}, transaction {} for client {} is not a dispute and can't be charged back",
-                            index + 2, t.tx, t.client,
+                            line, t.tx, t.client,
                         );
-                        return;
                     }
                 }
             }

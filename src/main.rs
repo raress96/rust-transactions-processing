@@ -2,6 +2,7 @@ use crate::parsing::{read_transactions_file, write_accounts_file};
 use crate::processor::Processor;
 use clap::Parser;
 use log::{error, info};
+use std::process::ExitCode;
 
 mod parsing;
 mod processor;
@@ -14,7 +15,7 @@ struct Args {
     transactions_csv_path: String,
 }
 
-fn main() {
+fn main() -> ExitCode {
     env_logger::init();
 
     let args = Args::parse();
@@ -22,8 +23,8 @@ fn main() {
     let csv_reader = match read_transactions_file(&args.transactions_csv_path) {
         Ok(csv_reader) => csv_reader,
         Err(e) => {
-            error!("Error while reading transactions file: {:?}", e);
-            return;
+            error!("Error while reading transactions file: {}", e);
+            return ExitCode::from(1);
         }
     };
 
@@ -38,7 +39,10 @@ fn main() {
             info!("Successfully written accounts!");
         }
         Err(e) => {
-            error!("Error while writing accounts: {:?}", e);
+            error!("Error while writing accounts: {}", e);
+            return ExitCode::from(2);
         }
     }
+
+    ExitCode::SUCCESS
 }
